@@ -23,15 +23,9 @@ tablet_files=$(find /tmp/libwacom/libwacom -name "*.tablet")
 for tablet_file in $tablet_files; do
     has_touch=$(cat "$tablet_file" | grep "Touch=true")
     if [ -n "$has_touch" ]; then
-        device_match_line=$(cat "$tablet_file" | grep "^DeviceMatch")
-        vendor_id=$(echo "$device_match_line" | cut -d '|' -f 2)
-        product_id=$(echo "$device_match_line" | cut -d '|' -f 3)
-        product_id=$(echo "$product_id" | cut -d ';' -f 1)
         product_name=$(cat "$tablet_file" | grep "^Name=" | cut -d '=' -f 2)
-        echo "Device: $product_name; ID: $vendor_id $product_id"
-
-        # Create the idc file
-        mkdir -p $DIR/idc
+        device_match_line=$(cat "$tablet_file" | grep "^DeviceMatch")
+        device_matches=(${device_match_line//;/ })
 
         if [[ $product_name =~ "ISDv4" ]]; then
             first_word="isdv4"
@@ -41,15 +35,29 @@ for tablet_file in $tablet_files; do
             first_word=$(echo "$first_word" | tr '[:upper:]' '[:lower:]')
         fi
 
-        mkdir -p $DIR/idc/$first_word
+        for device_match in "${device_matches[@]}"; do
+          if [[ $device_match =~ "Stylus" ]]; then
+            continue
+          fi
+          parts=(${device_match//|/ })
+          vendor_id=${parts[1]}
+          product_id=${parts[2]}
+          echo "Device: $product_name; ID: $vendor_id $product_id"
+          if [[ "$vendor_id" == "" ]] || [[ "$product_id" == "" ]]; then
+            continue
+          fi
+          # Create the idc file
+          mkdir -p $DIR/idc/$first_word
 
-        echo "# $product_name
+          echo "# $product_name
 # Android input device config file
 device.internal = 1
 touch.deviceType = touchScreen
 
 " > $DIR/idc/$first_word/Vendor_${vendor_id}_Product_${product_id}.idc
-    COUNT=$((COUNT+1))
+          COUNT=$((COUNT+1))
+
+        done
     fi
 done
 
